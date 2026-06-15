@@ -7,12 +7,20 @@ import httpx
 
 
 MAX_OCR_IMAGE_WIDTH = 360
-XIAOMEI_KEYWORDS = (
-    "不适合展示",
+XIAOMEI_TRIGGER_SCORE = 5
+XIAOMEI_POSITIVE_KEYWORDS = (
     "小美封审榜",
-    "小美评审团",
     "结果一致",
     "连续一致",
+    "不适合展示",
+    "用户评价",
+    "商户回复",
+    "商户证据",
+)
+XIAOMEI_NEGATIVE_KEYWORDS = (
+    "选择与结果一致",
+    "选择与结果不一致",
+    "下一关",
 )
 
 
@@ -49,10 +57,27 @@ def parse_image_url_with_ocr(image_url: str) -> tuple[list[list[Any]] | None, li
 
 
 def count_xiaomei_keywords(image_url: str) -> int:
-    """Count how many Xiaomei keywords appear in OCR lines from an image URL."""
+    """Score Xiaomei keywords from OCR lines in an image URL."""
     ocr_result, _ = parse_image_url_with_ocr(image_url)
     if not ocr_result:
         return 0
 
     lines = [str(item[1]) for item in ocr_result if len(item) >= 2]
-    return sum(1 for keyword in XIAOMEI_KEYWORDS if any(keyword in line for line in lines))
+    negative_lines = [
+        line
+        for line in lines
+        if any(keyword in line for keyword in XIAOMEI_NEGATIVE_KEYWORDS)
+    ]
+    positive_lines = [line for line in lines if line not in negative_lines]
+
+    positive_score = sum(
+        1
+        for keyword in XIAOMEI_POSITIVE_KEYWORDS
+        if any(keyword in line for line in positive_lines)
+    )
+    negative_score = sum(
+        1
+        for keyword in XIAOMEI_NEGATIVE_KEYWORDS
+        if any(keyword in line for line in negative_lines)
+    )
+    return positive_score - negative_score

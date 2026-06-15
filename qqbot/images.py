@@ -140,15 +140,15 @@ def search_answer_from_image(image: ImageAttachment) -> str | None:
     try:
         from qqbot.ai import extract_img
         from qqbot.diaoxinxin import search_answers_from_image
-        from qqbot.ocr import count_xiaomei_keywords
+        from qqbot.ocr import XIAOMEI_TRIGGER_SCORE, count_xiaomei_keywords
 
-        keyword_count = count_xiaomei_keywords(image.url)
+        keyword_score = count_xiaomei_keywords(image.url)
         _log.info(
-            "image search: OCR 小美关键词计数完成，attachment_id=%s keyword_count=%d",
+            "image search: OCR 小美关键词评分完成，attachment_id=%s keyword_score=%d",
             image.attachment_id,
-            keyword_count,
+            keyword_score,
         )
-        if keyword_count < 4:
+        if keyword_score < XIAOMEI_TRIGGER_SCORE:
             return None
 
         extracted = extract_img(image.url)
