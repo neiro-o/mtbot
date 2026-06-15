@@ -8,6 +8,7 @@ from qqbot.images import (
     log_image_attachments,
     search_answer_from_image,
 )
+from qqbot.rate_limit import check_image_parse_rate_limit
 
 
 _log = logging.get_logger()
@@ -22,7 +23,7 @@ class QQBotClient(botpy.Client):
         context = MessageContext(
             source="group",
             message_id=message.id,
-            sender_id=message.group_openid,
+            sender_id=getattr(message.author, "member_openid", None) or message.group_openid,
         )
         images = extract_image_attachments(message)
 
@@ -30,7 +31,14 @@ class QQBotClient(botpy.Client):
             if images:
                 log_image_attachments(context.source, context.message_id, context.sender_id, images)
 
-            image_search_reply = search_answer_from_image(images[0]) if images else None
+            image_search_reply = None
+            if images:
+                remaining_seconds = check_image_parse_rate_limit(context.sender_id)
+                if remaining_seconds:
+                    image_search_reply = f"你发送的太快了，请等待{remaining_seconds}秒后再发送。"
+                else:
+                    image_search_reply = search_answer_from_image(images[0])
+
             if image_search_reply:
                 reply = truncate_reply(image_search_reply)
             elif content:
@@ -68,7 +76,14 @@ class QQBotClient(botpy.Client):
             if images:
                 log_image_attachments(context.source, context.message_id, context.sender_id, images)
 
-            image_search_reply = search_answer_from_image(images[0]) if images else None
+            image_search_reply = None
+            if images:
+                remaining_seconds = check_image_parse_rate_limit(context.sender_id)
+                if remaining_seconds:
+                    image_search_reply = f"你发送的太快了，请等待{remaining_seconds}秒后再发送。"
+                else:
+                    image_search_reply = search_answer_from_image(images[0])
+
             if image_search_reply:
                 reply = truncate_reply(image_search_reply)
             elif content:

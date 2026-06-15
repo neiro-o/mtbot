@@ -118,14 +118,15 @@ def _format_extracted_image_date(value: object) -> str | None:
 def format_image_search_answer(content: str, answer: dict) -> str:
     from qqbot.handlers import format_search_date
 
+    review = answer.get("user_review", "").replace("\n", " ").strip()
     return "\n".join(
         [
-            f"【原始评价】 {content[:10]}...", "",
-            f"【题目】 {answer.get('user_review', '')}",
+            f"【原始评价】 {content[:20]}{'...' if len(content) > 20 else ''}", "",
+            f"【题目】 {review}",
             f"【时间】 {format_search_date(answer.get('timestamp'))}",
             (
                 f"【答案】 {answer.get('answer', '')}  "
-                f"(【比例】 {answer.get('ratio_1', '')}:{answer.get('ratio_2', '')})"
+                f"(比例 {answer.get('ratio_1', '')}:{answer.get('ratio_2', '')})"
             ),
         ]
     )
