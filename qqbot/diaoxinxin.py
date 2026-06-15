@@ -130,6 +130,72 @@ def search_answers(keyword: str) -> list[dict]:
     raise RuntimeError("diaoxinxin: search_answers 意外退出重试循环")
 
 
+def search_answers_from_image(keyword: str, date: str) -> list[dict]:
+    """
+    按图片解析结果搜索题目答案。
+
+    :param keyword: 图片解析出的评价内容
+    :param date: 图片解析出的评价日期，格式为 YYYY-mm-dd
+    :return: data.results 列表（dict list）
+    :raises RuntimeError: 超出最大重试次数仍失败
+    """
+    global _token
+    _ensure_token()
+    logger.info(
+        "diaoxinxin: 开始按图片解析结果搜索题目，keyword_length=%d date=%s",
+        len(keyword),
+        date,
+    )
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        headers = {"Authorization": f"Bearer {_token}"}
+        logger.info(
+            "diaoxinxin: 图片搜题请求，第 %d/%d 次，date=%s",
+            attempt,
+            MAX_RETRIES,
+            date,
+        )
+        try:
+            resp = httpx.get(
+                f"{BASE_URL}/bot/search",
+                params={"keyword": keyword, "date": date},
+                headers=headers,
+                timeout=10,
+            )
+        except Exception:
+            logger.exception("diaoxinxin: 图片搜题请求异常，第 %d/%d 次", attempt, MAX_RETRIES)
+            raise
+
+        if resp.status_code in (401, 403):
+            logger.warning(
+                "diaoxinxin: token 失效（%s），第 %d 次重新登录",
+                resp.status_code,
+                attempt,
+            )
+            if attempt < MAX_RETRIES:
+                _token = _login()
+                continue
+            else:
+                raise RuntimeError(
+                    f"diaoxinxin: 超出最大重试次数（{MAX_RETRIES}），token 仍然无效"
+                )
+
+        try:
+            resp.raise_for_status()
+            results = resp.json()["data"]["results"]
+        except Exception:
+            logger.exception(
+                "diaoxinxin: 图片搜题响应处理失败，status_code=%s",
+                resp.status_code,
+            )
+            raise
+
+        logger.info("diaoxinxin: 图片搜题成功，results_count=%d", len(results))
+        return results
+
+    raise RuntimeError("diaoxinxin: search_answers_from_image 意外退出重试循环")
+
+
 def upload_problem(user_id: str, task_id: str) -> dict:
     """
     上传题目。

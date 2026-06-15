@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from datetime import datetime
+import re
 from typing import Any
 
 from botpy import logging
@@ -87,11 +89,30 @@ def format_image_reply(images: list[ImageAttachment]) -> str:
     return f"收到 {len(images)} 张图片，已记录日志。"
 
 
-def _search_keyword_from_content(content: str, max_chars: int = 19) -> str:
-    content = content.strip()
-    if len(content) <= max_chars:
-        return content
-    return content[:max_chars]
+def _format_extracted_image_date(value: object) -> str | None:
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    normalized = re.sub(r"[./]", "-", text)
+    normalized = re.sub(r"年|月", "-", normalized).replace("日", "")
+    normalized = normalized.strip()
+
+    match = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", normalized)
+    if match:
+        year, month, day = (int(part) for part in match.groups())
+        try:
+            return datetime(year, month, day).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
 
 
 def format_image_search_answer(content: str, answer: dict) -> str:
@@ -117,7 +138,7 @@ def search_answer_from_image(image: ImageAttachment) -> str | None:
 
     try:
         from qqbot.ai import extract_img
-        from qqbot.diaoxinxin import search_answers
+        from qqbot.diaoxinxin import search_answers_from_image
         from qqbot.ocr import count_xiaomei_keywords
 
         keyword_count = count_xiaomei_keywords(image.url)
@@ -139,19 +160,29 @@ def search_answer_from_image(image: ImageAttachment) -> str | None:
             _log.error("image search: 评价 content 为空，attachment_id=%s", image.attachment_id)
             return "图片解析失败: 评价内容为空"
 
-        keyword = _search_keyword_from_content(content)
+        search_date = _format_extracted_image_date(extracted.get("date"))
+        if not search_date:
+            _log.error(
+                "image search: 评价 date 无法解析，attachment_id=%s date=%s",
+                image.attachment_id,
+                extracted.get("date"),
+            )
+            return "图片解析失败: 评价日期为空或格式错误"
+
+        keyword = content
         _log.info(
-            "image search: 开始按图片评价搜题，attachment_id=%s content_length=%d keyword=%s",
+            "image search: 开始按图片评价搜题，attachment_id=%s content_length=%d date=%s",
             image.attachment_id,
             len(content),
-            keyword,
+            search_date,
         )
-        results = search_answers(keyword)
+        results = search_answers_from_image(keyword, search_date)
         if not results:
             _log.error(
-                "image search: 搜题结果为空，attachment_id=%s keyword=%s",
+                "image search: 搜题结果为空，attachment_id=%s keyword_length=%d date=%s",
                 image.attachment_id,
-                keyword,
+                len(keyword),
+                search_date,
             )
             return f"原始评价: {content}\n搜题失败: 未找到答案"
 
